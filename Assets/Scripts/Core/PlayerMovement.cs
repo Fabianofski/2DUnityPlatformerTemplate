@@ -34,6 +34,7 @@ public class PlayerMovement : MonoBehaviour
     private bool _jumpingInput;
     private bool _jumpingBuffer;
     [SerializeField] private float jumpInputBufferTime = 0.2f;
+    [SerializeField] private float extraJumpMinHeight = 1;
     private bool _isGrounded;
     [SerializeField] private float coyoteJumpTime = 0.2f;
 
@@ -99,7 +100,8 @@ public class PlayerMovement : MonoBehaviour
 
     private void CheckIfGrounded()
     {
-        var isOnGround = Physics2D.OverlapBox(feet.position, new Vector2(0.95f, 0.05f), 0, groundLayer);
+        var isOnGround = Physics2D.OverlapBox(new Vector2(feet.position.x, feet.position.y - 0.025f), 
+                                                    new Vector2(0.95f, 0.05f), 0, groundLayer);
         if (!isOnGround || _isGrounded) return;
         _isGrounded = true;
         _extraJumps = initialExtraJumps;
@@ -124,6 +126,12 @@ public class PlayerMovement : MonoBehaviour
         }
         else if (_jumpingBuffer && _extraJumps > 0)
         {
+            if (Physics2D.OverlapBox(
+                    new Vector2(feet.position.x, feet.position.y - extraJumpMinHeight / 2), 
+                    new Vector2(0.95f, extraJumpMinHeight), 
+                    0, 
+                    groundLayer))
+                return;
             _rb.velocity = new Vector2(_rb.velocity.x, 0);
             _rb.AddForce(transform.up * jumpForce, ForceMode2D.Impulse);
             _extraJumps--;
@@ -143,7 +151,13 @@ public class PlayerMovement : MonoBehaviour
     
     private void OnDrawGizmos()
     {
+        var pos = feet.position;
+        
+        Gizmos.color = Color.black;
+        Gizmos.DrawCube(new Vector2(pos.x, pos.y - extraJumpMinHeight / 2), 
+            new Vector2(0.95f, extraJumpMinHeight));
+        
         Gizmos.color = _isGrounded ? Color.green : Color.red;
-        Gizmos.DrawCube(feet.position, new Vector2(0.95f, 0.05f));
+        Gizmos.DrawCube(new Vector2(pos.x, pos.y - 0.025f), new Vector2(0.95f, 0.05f));
     }
 }
