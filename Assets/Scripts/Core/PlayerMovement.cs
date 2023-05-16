@@ -4,7 +4,9 @@
 //  * Distributed under the terms of the MIT license (cf. LICENSE.md file)
 //  **/
 
+using System;
 using System.Collections;
+using System.Security.Cryptography;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -36,6 +38,7 @@ public class PlayerMovement : MonoBehaviour
     [SerializeField] private float jumpInputBufferTime = 0.2f;
     [SerializeField] private float extraJumpMinHeight = 1;
     private bool _isGrounded;
+    private bool _isCoyoteGrounded;
     [SerializeField] private float coyoteJumpTime = 0.2f;
 
     private void Start()
@@ -73,7 +76,20 @@ public class PlayerMovement : MonoBehaviour
     
     private void MoveCharacter()
     {
-        _rb.AddForce(new Vector2(_horizontalDirection, 0f) * movementAcceleration);
+        var hit = Physics2D.Raycast(feet.position, Vector2.down, 1f,  1 << LayerMask.NameToLayer("Ground"));
+        if (hit && Math.Abs(hit.normal.y) < 0.95)
+        {
+            _rb.velocity = new Vector2(maxMoveSpeed * _horizontalDirection, _rb.velocity.y);
+            _rb.constraints = _horizontalDirection == 0
+                ? RigidbodyConstraints2D.FreezePositionX | RigidbodyConstraints2D.FreezeRotation
+                : RigidbodyConstraints2D.FreezeRotation;
+        }
+        else
+        {
+             _rb.AddForce(new Vector2(_horizontalDirection, 0) * movementAcceleration);
+             _rb.constraints = RigidbodyConstraints2D.FreezeRotation;
+        }
+        
 
         if (Mathf.Abs(_rb.velocity.x) > maxMoveSpeed)
             _rb.velocity = new Vector2(Mathf.Sign(_rb.velocity.x) * maxMoveSpeed, _rb.velocity.y);
@@ -100,10 +116,10 @@ public class PlayerMovement : MonoBehaviour
 
     private void CheckIfGrounded()
     {
-        var isOnGround = Physics2D.OverlapBox(new Vector2(feet.position.x, feet.position.y - 0.025f), 
-                                                    new Vector2(0.95f, 0.05f), 0, groundLayer);
-        if (!isOnGround || _isGrounded) return;
-        _isGrounded = true;
+        _isGrounded = Physics2D.OverlapBox(new Vector2(feet.position.x, feet.position.y - 0.05f), 
+                                                    new Vector2(0.95f, 0.1f), 0, groundLayer);
+        if (!_isGrounded || _isCoyoteGrounded) return;
+        _isCoyoteGrounded = true;
         _extraJumps = initialExtraJumps;
         StartCoroutine(ResetIsGrounded());
     }
@@ -111,17 +127,18 @@ public class PlayerMovement : MonoBehaviour
     private IEnumerator ResetIsGrounded()
     {
         yield return new WaitForSeconds(coyoteJumpTime);
-        _isGrounded = false;
+        _isCoyoteGrounded = Physics2D.OverlapBox(new Vector2(feet.position.x, feet.position.y - 0.05f), 
+            new Vector2(0.95f, 0.1f), 0, groundLayer);;
     }
 
     private void ApplyJump()
     {
-        if (_isGrounded && _jumpingBuffer)
+        if (_isCoyoteGrounded && _jumpingBuffer)
         {
             _rb.velocity = new Vector2(_rb.velocity.x, 0);
             _rb.AddForce(transform.up * jumpForce, ForceMode2D.Impulse);
             StopCoroutine(ResetIsGrounded());
-            _isGrounded = false;
+            _isCoyoteGrounded = false;
             _jumpingBuffer = false;
         }
         else if (_jumpingBuffer && _extraJumps > 0)
@@ -141,12 +158,12 @@ public class PlayerMovement : MonoBehaviour
 
     private void ApplyFallMultiplier()
     {
-        if (_rb.velocity.y < 0)
+        if (_rb.velocity.y < 0 && !_isGrounded)
             _rb.gravityScale = fallMultiplier;
         else if (_rb.velocity.y > 0 && !_jumpingInput)
             _rb.gravityScale = lowJumpFallMultiplier;
         else
-            _rb.gravityScale = 2f;
+            _rb.gravityScale = 2;
     }
     
     private void OnDrawGizmos()
@@ -157,7 +174,7 @@ public class PlayerMovement : MonoBehaviour
         Gizmos.DrawCube(new Vector2(pos.x, pos.y - extraJumpMinHeight / 2), 
             new Vector2(0.95f, extraJumpMinHeight));
         
-        Gizmos.color = _isGrounded ? Color.green : Color.red;
-        Gizmos.DrawCube(new Vector2(pos.x, pos.y - 0.025f), new Vector2(0.95f, 0.05f));
+        Gizmos.color = _isCoyoteGrounded ? Color.green : Color.red;
+        Gizmos.DrawCube(new Vector2(pos.x, pos.y - 0.05f), new Vector2(0.95f, 0.1f));
     }
 }
