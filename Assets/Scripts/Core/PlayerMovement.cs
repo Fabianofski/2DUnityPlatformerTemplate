@@ -6,7 +6,6 @@
 
 using System;
 using System.Collections;
-using System.Security.Cryptography;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -17,6 +16,11 @@ public class PlayerMovement : MonoBehaviour
     private Rigidbody2D _rb;
     [SerializeField] private Transform feet;
     [SerializeField] private LayerMask groundLayer;
+    
+    [Header("Squash and Stretch")]
+    [SerializeField] private GameObject spriteGameObject;
+    [SerializeField] private Vector3 jumpSquash = new Vector3(0.6f, 1.3f, 0.4f);
+    private Vector2 _size;
 
     [Header("Movement Variables")] 
     [SerializeField] private float movementAcceleration = 70f;
@@ -45,6 +49,8 @@ public class PlayerMovement : MonoBehaviour
     {
         _extraJumps = initialExtraJumps;
         _rb = GetComponent<Rigidbody2D>();
+
+        _size = spriteGameObject.transform.localScale;
     }
 
     private void OnMove(InputValue inputValue)
@@ -116,8 +122,10 @@ public class PlayerMovement : MonoBehaviour
 
     private void CheckIfGrounded()
     {
+        var wasGrounded = _isGrounded;
         _isGrounded = Physics2D.OverlapBox(new Vector2(feet.position.x, feet.position.y - 0.05f), 
                                                     new Vector2(0.95f, 0.1f), 0, groundLayer);
+        
         if (!_isGrounded || _isCoyoteGrounded) return;
         _isCoyoteGrounded = true;
         _extraJumps = initialExtraJumps;
@@ -140,6 +148,8 @@ public class PlayerMovement : MonoBehaviour
             StopCoroutine(ResetIsGrounded());
             _isCoyoteGrounded = false;
             _jumpingBuffer = false;
+
+            SquashAndStretch(jumpSquash.x, jumpSquash.y, jumpSquash.z);
         }
         else if (_jumpingBuffer && _extraJumps > 0)
         {
@@ -152,8 +162,19 @@ public class PlayerMovement : MonoBehaviour
             _rb.velocity = new Vector2(_rb.velocity.x, 0);
             _rb.AddForce(transform.up * jumpForce, ForceMode2D.Impulse);
             _extraJumps--;
+            
+            SquashAndStretch(jumpSquash.x, jumpSquash.y, jumpSquash.z);
         }
         ApplyFallMultiplier();
+    }
+
+    private void SquashAndStretch(float x, float y, float time)
+    {
+        LeanTween.scale(spriteGameObject, new Vector2(_size.x * x, _size.y * y), time / 2).setEase(LeanTweenType.easeInQuad).setOnComplete(
+            () =>
+            {
+                LeanTween.scale(spriteGameObject, _size, time / 2).setEase(LeanTweenType.easeOutQuad);
+            });
     }
 
     private void ApplyFallMultiplier()
